@@ -24,14 +24,14 @@ train_loader, test_loader = load_dataloader()
 
 params = {
     'input_size': 1,
-    'hidden_size': 32,
+    'hidden_size': 64,
     'num_layers': 1,
-    'num_classes' : 2,
+    'num_classes' : 1,
 }
 
 # NOTE: Model persistency path
 
-name = f'lstm_labeled_10'
+name = f'lstm_p_5'
 model_path = path.join(OUT_PATH, 'model')
 if not path.exists(model_path):
     makedirs(model_path)
@@ -44,12 +44,12 @@ else:
     print('Model not found')
     # NOTE: Declare model
 
-    model = LSTM(**params).to(device)
+    model = LSTM_P(**params).to(device)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    train(model, train_loader, 10, criterion, optimizer, device, name)
+    train(model, train_loader, 5, criterion, optimizer, device, name)
 
     loss_plot(name)
 

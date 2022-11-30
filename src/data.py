@@ -45,9 +45,9 @@ class SequenceLabeledDataset(Dataset):
         return sequence, label
 
 def load_dataloader():
-    sequences = pd.read_csv(path.join(DATA_PATH, 'sequences_labeled.csv'), sep='\t')
+    sequences = pd.read_csv(path.join(DATA_PATH, 'sequences.csv'), sep='\t')
 
-    dataset = SequenceLabeledDataset(
+    dataset = SequenceDataset(
         sequences,
     )
 

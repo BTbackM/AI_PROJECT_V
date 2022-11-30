@@ -11,17 +11,17 @@ from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_se
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class LSTM_P(nn.Module):
-    def __init__(self, input_size=1, hidden_size=32, num_layers=1):
+    def __init__(self, input_size=1, hidden_size=32, num_layers=1, num_classes=1):
         super(LSTM_P, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
                            num_layers=num_layers, bidirectional=False, batch_first=True)
-        self.drop_out = nn.Dropout(0.25)
-        self.fc1 = nn.Linear(32, 32)
+        self.drop_out = nn.Dropout(0.2)
+        self.fc_01 = nn.Linear(self.hidden_size, 128)
+        self.fc_02 = nn.Linear(128, self.hidden_size)
         self.relu = nn.ReLU()
-        self.bn1 = nn.BatchNorm1d(32)
-        self.fc_out = nn.Linear(32, 1)
+        self.fc_out = nn.Linear(self.hidden_size, num_classes)
 
     def forward(self, x):
         # NOTE: Windowed LSTM
@@ -35,13 +35,16 @@ class LSTM_P(nn.Module):
         out, _ = self.lstm(xpadded)
 
         out, _ = pad_packed_sequence(out, batch_first=True, padding_value=0)
-        y = out[-1, -1, :]
+        outputs = out[-1, -1, :]
 
-        # y = self.fc1(y)
+        # y = self.fc_01(outputs)
         # y = self.relu(y)
-        # y = self.bn1(y)
         # y = self.drop_out(y)
-        y = self.fc_out(y)
+        # y = self.fc_02(y)
+        # y = self.relu(y)
+        # y = self.drop_out(y)
+        y = self.fc_out(outputs)
+        
         return y
 
 class LSTM_WP(nn.Module):
@@ -51,7 +54,11 @@ class LSTM_WP(nn.Module):
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
                            num_layers=num_layers, bidirectional=False, batch_first=True)
-        self.fc_out = nn.Linear(self.hidden_size, num_classes)
+        self.drop_out = nn.Dropout(0.2)
+        self.fc_01 = nn.Linear(self.hidden_size, 128)
+        self.fc_02 = nn.Linear(128, 128)
+        self.relu = nn.ReLU()
+        self.fc_out = nn.Linear(128, num_classes)
 
     def forward(self, x):
         # NOTE: Windowed LSTM
@@ -60,13 +67,23 @@ class LSTM_WP(nn.Module):
 
         outputs = []
         for xx in x:
-            out, _ = self.lstm(xx.unsqueeze(0))
+            out, (h_out, _) = self.lstm(xx.unsqueeze(0))
             out = out[-1, -1, :]
+            h_out = h_out.view(-1, self.hidden_size)
 
             outputs.append(out.squeeze(0))
         outputs = torch.stack(outputs)
+        outputs = outputs[-1, :]
+        # outputs = h_out
 
-        y = self.fc_out(outputs)
+        y = self.fc_01(outputs)
+        y = self.relu(y)
+        y = self.drop_out(y)
+        y = self.fc_02(y)
+        y = self.relu(y)
+        y = self.drop_out(y)
+        y = self.fc_out(y)
+
         return y
 
 class LSTM(nn.Module):
@@ -84,7 +101,6 @@ class LSTM(nn.Module):
         
         out, (h_out, _) = self.lstm(x.unsqueeze(0))
         out = out[-1, -1, :]
-        # h_out = h_out.view(-1, self.hidden_size)
 
         y = self.fc_out(out)
         return y
@@ -102,7 +118,7 @@ def train(model, dataset, epochs, criterion, optimizer, device, name):
 
             # NOTE: Forward pass
             outputs = model(sequences)
-            loss = criterion(outputs.unsqueeze(0), labels)
+            loss = criterion(outputs.float(), labels.float())
             losses.append(loss.item())
 
             # NOTE: Backward and optimize
@@ -131,9 +147,10 @@ def predict(model, dataset, device):
 
             outputs = model(sequences)
             # predicted = outputs.data
+            print(outputs)
             _, predicted = torch.max(outputs.data, 0)
             total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-            # correct += (abs(predicted - labels) < 5).sum().item()
+            # correct += (predicted == labels).sum().item()
+            correct += (abs(predicted - labels) < 5).sum().item()
 
         print(f'Accuracy of the model on the {total} test sequences: {100 * correct / total}%')
